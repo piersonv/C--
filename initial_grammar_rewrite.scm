@@ -1,5 +1,7 @@
 #lang eopl
 
+(define print eopl:pretty-print)
+
 (define-datatype program program?
  (a-program(expl1 expression?)))
 
@@ -28,10 +30,24 @@
       (body2 (list-of expression?)))
  (var-exp(var symbol?)) ;done
  (let-exp
-      (var symbol?)
-      (exp1 expression?)
-      (body expression?))
+   (vars (list-of identifier?))
+   (exps (list-of expression?))
+   (body expression?))
+  (begin-exp
+    (exp expression?)
+    (exps (list-of expression?)))
   (minus-exp(exp1 expression?)) ;done
+  (plus-exp(exp1 expression?))
+  (newref-exp
+   (exp expression?))
+  (deref-exp
+   (var expression?))
+  ;(nameless-deref-exp
+   ;(var expression?))
+  (setref-exp
+   (var expression?)
+   (exp expression?))
+  
  ; (equal?-exp
   ; (exp1 expression?)
   ; (exp2 expression?))
@@ -47,7 +63,9 @@
     (num-val
       (value number?))
     (bool-val
-      (boolean boolean?)))
+      (boolean boolean?))
+   (ref-val
+    (ref reference?)))
 
   (define expval->num
     (lambda (v)
@@ -60,6 +78,12 @@
       (cases expval v
 	(bool-val (bool) bool)
 	(else (expval-extractor-error 'bool v)))))
+
+(define expval->ref
+  (lambda (val)
+    (cases expval val
+      (ref-val (ref) ref)
+      (else (expval-extractor-error 'ref val)))))
 
   (define expval-extractor-error
     (lambda (variant value)
@@ -139,13 +163,16 @@
 
       (expression (identifier) var-exp)
 
-      (expression
-       ("let" identifier "=" expression ";" expression)
-       let-exp)   
+      (expression ("let" (arbno identifier "=" expression) "in" expression) let-exp) 
 
+      (expression ("begin" expression (arbno ";" expression) "end") begin-exp)
       (expression
        ("--" expression)
        minus-exp)
+
+      (expression
+       ("++" expression)
+       plus-exp)
       
      ; (expression
       ; ("equal?" "(" expression "," expression ")")
@@ -158,6 +185,12 @@
      ; (expression
       ; ("less?" "(" expression "," expression ")")
       ; less?-exp)
+
+
+      (expression ("newref" "(" expression ")") newref-exp)
+      (expression ("deref" "(" expression ")") deref-exp)
+      (expression ("setref" "(" expression "," expression ")") setref-exp)
+      
       ))
 
 (define scan&parse
@@ -169,6 +202,7 @@
 
  (define value-of-program 
     (lambda (pgm)
+      (initialize-store!)
       (cases program pgm
         (a-program (exp1)
           (value-of exp1 (init-env))))))
@@ -208,6 +242,29 @@
                    (bool-val #f)))
                 )
               )))
+
+        (begin-exp (exp exps)
+                 (let ((last (value-of exp env)))
+                   (define (begin-exp-rec exps last)
+                     (if (null? exps)
+                         last
+                         (let ((last (value-of (car exps) env)))
+                           (begin-exp-rec (cdr exps) last))))
+                   (begin-exp-rec exps last)))
+
+        (newref-exp (exp1)
+                  (let ((v1 (value-of exp1 env)))
+                         (ref-val (newref v1))))
+        (deref-exp (exp1)
+                   (let ((v1 (value-of exp1 env)))
+                     (let ((ref1 (expval->ref v1)))
+                       (deref ref1))))
+        (setref-exp (exp1 exp2)
+                    (let ((ref (expval->ref (value-of exp1 env))))
+                      (let ((val2 (value-of exp2 env))) (begin
+                                                          (setref! ref val2)
+                                                          (num-val 23)))))
+
         ;(diff-exp (exp1 exp2)
           ;(let ((val1 (value-of exp1 env))
                ; (val2 (value-of exp2 env)))
@@ -241,13 +298,20 @@
             (if (expval->bool val1)
               (help-if body1 env)
               (help-if body2 env))))
-        (let-exp (var exp1 body)       
-          (let ((val1 (value-of exp1 env)))
-            (value-of body
-              (extend-env var val1 env))))
+        (let-exp (vars exps body)
+               (let ((vals (map (lambda (exp) (value-of exp env)) exps)))
+                 (define (add-env vars vals env)
+                   (if (null? vars)
+                       env
+                       (add-env (cdr vars) (cdr vals) (extend-env (car vars) (car vals) env))))
+                 (value-of body (add-env vars vals env))))
         (minus-exp (exp1)
            (let ((val1 (value-of exp1 env)))
              (let ((num1 (- (expval->num val1) 1)))
+             (num-val num1))))
+        (plus-exp (exp1)
+           (let ((val1 (value-of exp1 env)))
+             (let ((num1 (+ (expval->num val1) 1)))
              (num-val num1))))
        ; (equal?-exp (exp1 exp2)
           ; (let ((val1 (value-of exp1 env))(val2 (value-of exp2 env)))
@@ -269,3 +333,61 @@
 (define init-env 
     (lambda ()
       (empty-env)))
+
+(define (empty-store)
+  (make-vector 0))
+
+(define the-store 'uninitialized)
+
+(define (get-store)
+  the-store)
+
+(define (initialize-store!)
+  (set! the-store (empty-store)))
+
+(define (reference? v)
+  (integer? v))
+
+(define (identifier? x)
+  (and (symbol? x)
+       (not (eqv? x 'lambda))))
+
+(define (newref val)
+  (let* ((next-ref (vector-length the-store))
+         (next-store (make-vector (+ next-ref 1) val)))
+    (define (newref-rec idx)
+      (if (equal? idx next-ref)
+          0
+          (begin (vector-set! next-store idx (vector-ref the-store idx))
+                 (newref-rec (+ idx 1)))))
+    (newref-rec 0)
+    (set! the-store next-store)
+    next-ref))
+
+(define (deref ref)
+  (vector-ref the-store ref))
+
+(define (setref! ref val)
+  (vector-set! the-store ref val)
+  ref)
+
+(define program-1
+  "begin
+ ++5;
+   begin
+(5 - 4)
+end;
+--5 end")
+
+(define program-3
+  "let x = newref(0)
+   in begin
+        setref(x, 11);
+        setref(x ,(deref(x) - 5));
+        -- deref(x)
+      end
+
+")
+
+(print (run program-1))
+(print (run program-3))
