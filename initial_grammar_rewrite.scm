@@ -11,19 +11,6 @@
        (exp1 expression?)
        (bin string?)
        (exp2 expression?))  
-  
-; (diff-exp
-;       (exp1 expression?)
-;       (exp2 expression?))
-; (sum-exp
-;       (exp1 expression?)
-;       (exp2 expression?))
-; (prod-exp
-;       (exp1 expression?)
- ;      (exp2 expression?))
-; (quot-exp
-     ;  (exp1 expression?)
-      ; (exp2 expression?))
  (if-exp
       (exp1 expression?) 
       (body1 (list-of expression?))
@@ -42,21 +29,38 @@
    (exp expression?))
   (deref-exp
    (var expression?))
-  ;(nameless-deref-exp
-   ;(var expression?))
   (setref-exp
    (var expression?)
    (exp expression?))
   
- ; (equal?-exp
-  ; (exp1 expression?)
-  ; (exp2 expression?))
- ; (greater?-exp
- ;  (exp1 expression?)
-  ; (exp2 expression?))
- ; (less?-exp
-  ; (exp1 expression?)
-   ;(exp2 expression?))
+  (emptylist-exp)
+  
+  (list-exp
+   (exps (list-of expression?)))
+  
+  (proc-exp
+   (vars (list-of identifier?))
+   (body expression?))
+  
+  (letproc-exp
+   (name identifier?)
+   (vars (list-of identifier?))
+   (exp expression?)
+   (body expression?))
+  
+  (letrec-exp
+   (names (list-of identifier?))
+   (varss (list-of (list-of identifier?)))
+   (exps (list-of expression?))
+   (body expression?))
+  
+  (call-exp
+   (rator expression?)
+   (rand (list-of expression?)))
+
+  (while-exp (cond expression?)
+              (body (list-of expression?)))
+  
   )
 
  (define-datatype expval expval?
@@ -64,6 +68,10 @@
       (value number?))
     (bool-val
       (boolean boolean?))
+   (proc-val
+    (proc proc?))
+   (list-val
+   (lst list?))
    (ref-val
     (ref reference?)))
 
@@ -85,10 +93,29 @@
       (ref-val (ref) ref)
       (else (expval-extractor-error 'ref val)))))
 
+(define expval->proc
+  (lambda (val)
+    (cases expval val
+      (proc-val (proc) proc)
+      (else (expval-extractor-error 'proc val)))))
+
+(define expval->list
+  (lambda (val)
+    (cases expval val
+      (list-val (lst) lst)
+      (else (expval-extractor-error 'list val)))))
+
+
   (define expval-extractor-error
     (lambda (variant value)
       (eopl:error 'expval-extractors "Looking for a ~s, found ~s"
 	variant value)))
+
+ (define-datatype proc proc?
+   (procedure
+    (vars (list-of identifier?))
+    (body expression?)
+    (saved-env environment?)))
 
 
 (define-datatype environment environment?
@@ -96,7 +123,12 @@
   (extend-env
    (saved-var var?)
    (saved-val scheme-value?)
-   (saved-env environment?)))
+   (saved-env environment?))
+  (extend-env-rec
+   (names (list-of identifier?))
+   (varss (list-of (list-of identifier?)))
+   (exps (list-of expression?))
+   (old-env environment?)))
 
 (define var? symbol?)
 (define scheme-value? (lambda (s) #t))
@@ -109,20 +141,21 @@
       (extend-env (saved-var saved-val saved-env)
                   (if (eqv? search-var saved-var)
                       saved-val
-                      (apply-env saved-env search-var))))))
+                      (apply-env saved-env search-var)))
+      (extend-env-rec (names varss exps old-env)
+                      (define (apply-rec names varss exps)
+                        (if (null? names)
+                            (apply-env old-env search-var)
+                            (if (eqv? search-var (car names))
+                                (proc-val (procedure (car varss) (car exps) env))
+                                (apply-rec (cdr names) (cdr varss) (cdr exps)))))
+                      (apply-rec names varss exps))
+      )))
 
 (define report-no-binding-found
   (lambda (search-var)
     (eopl:error 'apply-env "No binding for ~s" search-var)))
 
-(define has-binding?
-  (lambda (env search-var)
-    (cases environment env
-      (empty-env ()
-                 #f)
-      (extend-env (saved-var saved-val saved-env)
-                  (or (eqv? search-var saved-var)
-                      (has-binding? saved-env search-var))))))
 
 (define the-lexical-spec
     '((whitespace (whitespace) skip)
@@ -144,19 +177,6 @@
        ("(" expression binary-op expression ")")
        binary-exp)
       
-     ; (expression
-      ;  ("-" "(" expression "," expression ")")
-       ; diff-exp)
-     ; (expression
-      ;  ("+" "(" expression "," expression ")")
-       ; sum-exp)
-     ; (expression
-      ;  ("*" "(" expression "," expression ")")
-      ;  prod-exp)
-    ;  (expression
-       ; ("/" "(" expression "," expression ")")
-       ; quot-exp)
-      
       (expression
        ("if" "(" expression ")" "{" (arbno expression) "}" "else" "{" (arbno expression) "}")
        if-exp)
@@ -174,23 +194,17 @@
        ("++" expression)
        plus-exp)
       
-     ; (expression
-      ; ("equal?" "(" expression "," expression ")")
-      ; equal?-exp)
-       
-     ; (expression
-     ;  ("greater?" "(" expression "," expression ")")
-     ;  greater?-exp)
-       
-     ; (expression
-      ; ("less?" "(" expression "," expression ")")
-      ; less?-exp)
-
-
       (expression ("newref" "(" expression ")") newref-exp)
       (expression ("deref" "(" expression ")") deref-exp)
       (expression ("setref" "(" expression "," expression ")") setref-exp)
-      
+
+      (expression ("emptylist") emptylist-exp)
+      (expression ("list" "(" (separated-list expression ",") ")") list-exp)
+      (expression ("proc" "(" (arbno identifier) ")" expression) proc-exp)
+      (expression ("letproc" identifier "(" (arbno identifier) ")" expression "in" expression) letproc-exp)
+      (expression ("letrec" (arbno identifier "(" (arbno identifier) ")" "=" expression) "in" expression) letrec-exp)
+      (expression ("[" expression (arbno expression) "]") call-exp)
+      (expression ("while" "(" expression ")" "{" (arbno expression) "}" ) while-exp)
       ))
 
 (define scan&parse
@@ -207,11 +221,21 @@
         (a-program (exp1)
           (value-of exp1 (init-env))))))
  
- (define help-if
-    (lambda (exps env)
-      (cond
-        ((null? exps) '())
-           (else (cons (value-of (car exps) env)(help-if (cdr exps) env))))))
+ ;(define help-if
+  ;  (lambda (exps env)
+   ;   (cond
+    ;    ((null? exps) '())
+     ;      (else (cons (value-of (car exps) env)(help-if (cdr exps) env))))))
+
+(define help-if
+  (lambda (exps env)
+                 (let ((last (value-of (car exps) env)))
+                   (define (help-if-rec exps last)
+                     (if (null? exps)
+                         last
+                         (let ((last (value-of (car exps) env)))
+                           (help-if-rec (cdr exps) last))))
+                   (help-if-rec exps last))))
 
   (define value-of
     (lambda (exp env)
@@ -265,39 +289,12 @@
                                                           (setref! ref val2)
                                                           (num-val 23)))))
 
-        ;(diff-exp (exp1 exp2)
-          ;(let ((val1 (value-of exp1 env))
-               ; (val2 (value-of exp2 env)))
-            ;(let ((num1 (expval->num val1))
-                 ; (num2 (expval->num val2)))
-             ; (num-val
-               ; (- num1 num2)))))
-        ;(sum-exp (exp1 exp2)
-         ; (let ((val1 (value-of exp1 env))
-             ;   (val2 (value-of exp2 env)))
-           ; (let ((num1 (expval->num val1))
-              ;    (num2 (expval->num val2)))
-             ; (num-val
-               ; (+ num1 num2)))))
-       ; (prod-exp (exp1 exp2)
-         ; (let ((val1 (value-of exp1 env))
-             ;   (val2 (value-of exp2 env)))
-           ; (let ((num1 (expval->num val1))
-                ;  (num2 (expval->num val2)))
-             ; (num-val
-               ; (* num1 num2)))))
-       ; (quot-exp (exp1 exp2)
-         ; (let ((val1 (value-of exp1 env))
-               ; (val2 (value-of exp2 env)))
-          ;  (let ((num1 (expval->num val1))
-               ;   (num2 (expval->num val2)))
-             ; (num-val
-               ; (/ num1 num2)))))
         (if-exp (exp1 body1 body2)
           (let ((val1 (value-of exp1 env)))
             (if (expval->bool val1)
               (help-if body1 env)
               (help-if body2 env))))
+        
         (let-exp (vars exps body)
                (let ((vals (map (lambda (exp) (value-of exp env)) exps)))
                  (define (add-env vars vals env)
@@ -305,6 +302,7 @@
                        env
                        (add-env (cdr vars) (cdr vals) (extend-env (car vars) (car vals) env))))
                  (value-of body (add-env vars vals env))))
+        
         (minus-exp (exp1)
            (let ((val1 (value-of exp1 env)))
              (let ((num1 (- (expval->num val1) 1)))
@@ -313,22 +311,53 @@
            (let ((val1 (value-of exp1 env)))
              (let ((num1 (+ (expval->num val1) 1)))
              (num-val num1))))
-       ; (equal?-exp (exp1 exp2)
-          ; (let ((val1 (value-of exp1 env))(val2 (value-of exp2 env)))
-            ; (let((num1 (expval->num val1))(num2 (expval->num val2)))
-              ; (if (eqv? num1 num2) (bool-val #t)
-                  ; (bool-val #f)))))
-       ; (greater?-exp (exp1 exp2)
-          ; (let ((val1 (value-of exp1 env))(val2 (value-of exp2 env)))
-            ; (let((num1 (expval->num val1))(num2 (expval->num val2)))
-              ; (if (> num1 num2) (bool-val #t)
-                  ; (bool-val #f)))))
-       ; (less?-exp (exp1 exp2)
-          ; (let ((val1 (value-of exp1 env))(val2 (value-of exp2 env)))
-            ; (let((num1 (expval->num val1))(num2 (expval->num val2)))
-              ; (if (< num1 num2) (bool-val #t)
-                  ; (bool-val #f)))))
+
+        (emptylist-exp () (list-val '()))
+      
+      (list-exp (exps)
+                (list-val (map (lambda (exp) (value-of exp env)) exps)))
+      
+      (proc-exp (vars body)
+                (proc-val (procedure vars body env)))
+      
+      (letproc-exp (proc-name proc-args proc-body let-body)
+                   (let ((proc (proc-val (procedure proc-args proc-body env))))
+                     (value-of let-body
+                               (extend-env proc-name proc env))))
+      
+      (letrec-exp (p-name b-var p-body letrec-body)
+                  (value-of letrec-body
+                            (extend-env-rec p-name b-var p-body env)))
+      
+      (call-exp (rator rand)
+                (let ((proc (expval->proc (value-of rator env)))
+                      (args (map (lambda (exp) (value-of exp env)) rand)))
+                  (apply-procedure proc args)))
+
+        
+
+        ;(while-exp (cond body)
+         ;          (if (value-of cond env)
+          ;             (help-loop cond body env)
+           ;            '()))
+
+        (while-exp (cond body)
+        (let loop ()
+          (if (value-of cond env)
+            (begin
+              (help-if body env)
+              (loop))
+            '())))
         )))
+
+
+(define help-loop
+  (lambda (cond body env)
+    (begin
+      (help-if body env)
+      (if (value-of cond env)
+          (help-loop cond body env)
+          '()))))
 
 (define init-env 
     (lambda ()
@@ -338,6 +367,9 @@
   (make-vector 0))
 
 (define the-store 'uninitialized)
+
+(define (get-val value-of-result)
+  (car value-of-result))
 
 (define (get-store)
   the-store)
@@ -371,6 +403,21 @@
   (vector-set! the-store ref val)
   ref)
 
+(define apply-procedure
+  (lambda (proc1 args)
+    (cases proc proc1
+      (procedure (vars body saved-env)
+                 (define (apply-procedure-rec vars vals env)
+                   (if (null? vars)
+                       (if (null? vals)
+                           (value-of body env)
+                           (apply-procedure (expval->proc (value-of body env)) vals))
+                       (if (null? vals)
+                           (procedure vars body env)
+                           (apply-procedure-rec (cdr vars) (cdr vals)
+                                                (extend-env (car vars) (car vals) env)))))
+                 (apply-procedure-rec vars args saved-env)))))
+
 (define program-1
   "begin
  ++5;
@@ -379,7 +426,7 @@
 end;
 --5 end")
 
-(define program-3
+(define program-2
   "let x = newref(0)
    in begin
         setref(x, 11);
@@ -389,5 +436,30 @@ end;
 
 ")
 
+(define program-3 "letrec sum(x y) = if ((x == 0)) {y} else{ [sum (x - 1) (y + 1)]} in [sum 3 2]")
+
+(define program-4 "letrec
+                             even(x) = if ((x == 0)) {1} else{ [odd (x - 1)]}
+                             odd(x) = if ((x == 0)) {0} else{ [even (x - 1)]}
+                           in [odd 13]")
+
+
+(define program-5 "if( (5 == 6)) {(5 + 1) (1 + 2) } else{ (5 - 1) (1 + 1)} ")
+
+(define program-6 "let x = newref(0) in begin
+                              while ( (deref(x) < 1) ){ setref(x, (deref(x) + 2)) } ; deref(x) end")
+
+(define program-7 "let x = newref(3) in begin
+                              if ( (deref(x) < 5) ) {1} else {0} ; deref(x) end")
+
 (print (run program-1))
+(print (run program-2))
+
+
 (print (run program-3))
+
+(print (run program-4))
+
+(print (run program-5))
+
+;(print (run program-6))
