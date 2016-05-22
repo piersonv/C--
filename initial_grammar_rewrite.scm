@@ -6,25 +6,40 @@
  (a-program(expl1 expression?)))
 
 (define-datatype expression expression?
- (const-exp(num number?)) ;done
-(binary-exp
+ (const-exp(num number?))
+  
+ (binary-exp
        (exp1 expression?)
        (bin string?)
-       (exp2 expression?))  
+       (exp2 expression?))
+  
  (if-exp
       (exp1 expression?) 
       (body1 (list-of expression?))
       (body2 (list-of expression?)))
- (var-exp(var symbol?)) ;done
+  
+ (var-exp(var symbol?))
+  
  (let-exp
    (vars (list-of identifier?))
    (exps (list-of expression?))
    (body expression?))
+  
+;  (begin-exp
+;    (exp expression?)
+;    (exps (list-of expression?)))
   (begin-exp
-    (exp expression?)
-    (exps (list-of expression?)))
-  (minus-exp(exp1 expression?)) ;done
+    (exps (list-of expression?))
+    (ret expression?))
+  
+  (minus-exp(exp1 expression?))
   (plus-exp(exp1 expression?))
+
+  ;(num-var-exp
+  ; (num-lit string?)
+  ; (var identifier?)
+  ; (exps (list-of expression?)))
+  
   (newref-exp
    (exp expression?))
   (deref-exp
@@ -58,9 +73,21 @@
    (rator expression?)
    (rand (list-of expression?)))
 
-  (while-exp (cond expression?)
-              (body (list-of expression?)))
-  
+  (while-exp
+   (cond expression?)
+   (body (list-of expression?)))
+  (for-exp
+   (num-lit string?)
+   (var identifier?)
+   (exp1 expression?)
+   (cond expression?)
+   (increment expression?)
+   (body (list-of expression?)))
+   
+  (print-exp
+   (exps (list-of expression?)))
+  (endl-exp
+   (nl string?))
   )
 
  (define-datatype expval expval?
@@ -166,6 +193,8 @@
       (number (digit (arbno digit)) number)
       (number ("-" digit (arbno digit)) number)
       (binary-op ((or "-" "+" "*" "/" "==" "!=" ">" "<" ">=" "<=")) string)
+      (endl ("endl") string)
+      (num-literal ((or "int" "double" "float" "long" "long long")) string)
       ))
   
   (define the-grammar
@@ -183,9 +212,17 @@
 
       (expression (identifier) var-exp)
 
-      (expression ("let" (arbno identifier "=" expression) "in" expression) let-exp) 
+      (expression
+       ("let" (arbno identifier "=" expression) "in" expression)
+       let-exp) 
 
-      (expression ("begin" expression (arbno ";" expression) "end") begin-exp)
+      ;(expression
+      ; ("begin" expression (arbno ";" expression) "end")
+      ; begin-exp)
+      (expression
+       ("int main" "()" "{" (arbno expression ";") "return" expression ";" "}")
+       begin-exp)
+      
       (expression
        ("--" expression)
        minus-exp)
@@ -194,17 +231,60 @@
        ("++" expression)
        plus-exp)
       
-      (expression ("newref" "(" expression ")") newref-exp)
-      (expression ("deref" "(" expression ")") deref-exp)
-      (expression ("setref" "(" expression "," expression ")") setref-exp)
 
-      (expression ("emptylist") emptylist-exp)
-      (expression ("list" "(" (separated-list expression ",") ")") list-exp)
-      (expression ("proc" "(" (arbno identifier) ")" expression) proc-exp)
-      (expression ("letproc" identifier "(" (arbno identifier) ")" expression "in" expression) letproc-exp)
-      (expression ("letrec" (arbno identifier "(" (arbno identifier) ")" "=" expression) "in" expression) letrec-exp)
-      (expression ("[" expression (arbno expression) "]") call-exp)
-      (expression ("while" "(" expression ")" "{" (arbno expression) "}" ) while-exp)
+      ;(expression
+       ;(num-literal identifier (arbno "=" expression) ";")
+       ;num-var-exp)
+      
+      (expression
+       ("newref" "(" expression ")")
+       newref-exp)
+      
+      (expression
+       ("deref" "(" expression ")")
+       deref-exp)
+      
+      (expression
+       ("setref" "(" expression "," expression ")")
+       setref-exp)
+
+      (expression
+       ("emptylist")
+       emptylist-exp)
+      
+      (expression
+       ("list" "(" (separated-list expression ",") ")")
+       list-exp)
+      
+      (expression
+       ("proc" "(" (arbno identifier) ")" expression)
+       proc-exp)
+      
+      (expression
+       ("letproc" identifier "(" (arbno identifier) ")" expression "in" expression)
+       letproc-exp)
+      
+      (expression
+       ("letrec" (arbno identifier "(" (arbno identifier) ")" "=" expression) "in" expression)
+       letrec-exp)
+      
+      (expression
+       ("[" expression (arbno expression) "]")
+       call-exp)
+      
+      (expression
+       ("while" "(" expression ")" "{" (arbno expression) "}" )
+       while-exp)
+      (expression
+       ("for" "(" num-literal identifier "=" expression ";" expression ";" expression ")" "{" (arbno expression) "}")
+       for-exp)
+
+      (expression
+       ("cout" (arbno "<<" expression) ";")
+       print-exp)
+      (expression
+       (endl)
+       endl-exp)
       ))
 
 (define scan&parse
@@ -220,22 +300,52 @@
       (cases program pgm
         (a-program (exp1)
           (value-of exp1 (init-env))))))
+  
  
- ;(define help-if
-  ;  (lambda (exps env)
-   ;   (cond
-    ;    ((null? exps) '())
-     ;      (else (cons (value-of (car exps) env)(help-if (cdr exps) env))))))
+ (define help-if
+    (lambda (exps env)
+      (cond
+        ((null? exps) '())
+           (else (cons (value-of (car exps) env)(help-if (cdr exps) env))))))
 
-(define help-if
+;(define help-if
+ ; (lambda (exps env)
+  ;               (let ((last (value-of (car exps) env)))
+   ;                (define (help-if-rec exps last)
+    ;                 (if (null? exps)
+     ;                    last
+      ;                   (let ((last (value-of (car exps) env)))
+       ;                    (help-if-rec (cdr exps) last))))
+        ;           (help-if-rec exps last))))
+
+(define help-print
   (lambda (exps env)
-                 (let ((last (value-of (car exps) env)))
-                   (define (help-if-rec exps last)
-                     (if (null? exps)
-                         last
-                         (let ((last (value-of (car exps) env)))
-                           (help-if-rec (cdr exps) last))))
-                   (help-if-rec exps last))))
+    (cond
+      ((null? (cdr exps)) (let ((val (value-of (car exps) env)))
+                            (display val)))
+      (else
+       (let ((val (value-of (car exps) env)))
+       (display val) (help-print (cdr exps) env))))))
+
+(define help-while-loop
+  (lambda (cond body env)
+    (begin
+      (help-if body env)
+        (let ((val (value-of cond env)))
+          (if (equal? val (bool-val #t)) (help-while-loop cond body env)
+            '())))))
+
+ (define help-for-loop
+   (lambda (var cond body increment env)
+     (begin
+       (help-if body env)
+       (let ((new-val (value-of increment env)))
+         (let ((new-env (extend-env var new-val env)))
+           (let ((val (value-of cond new-env)))
+             (if (equal? val (bool-val #t))
+                   (help-for-loop var cond body increment new-env)
+               '())))))))
+  
 
   (define value-of
     (lambda (exp env)
@@ -267,14 +377,35 @@
                 )
               )))
 
-        (begin-exp (exp exps)
-                 (let ((last (value-of exp env)))
-                   (define (begin-exp-rec exps last)
-                     (if (null? exps)
-                         last
-                         (let ((last (value-of (car exps) env)))
-                           (begin-exp-rec (cdr exps) last))))
-                   (begin-exp-rec exps last)))
+;        (begin-exp (exp exps)
+;                 (let ((last (value-of exp env)))
+;                   (define (begin-exp-rec exps last)
+;                     (if (null? exps)
+;                         last
+;                         (let ((last (value-of (car exps) env)))
+;                           (begin-exp-rec (cdr exps) last))))
+;                   (begin-exp-rec exps last)))
+        (begin-exp (exps ret)
+                 (define (begin-exp-rec exps)
+                   (cond
+                     ((null? (cdr exps)) (value-of (car exps) env))
+                     (else
+                      (value-of (car exps) env)
+                      (begin-exp-rec (cdr exps)))))
+                 (begin-exp-rec exps)
+                 (value-of ret env))
+
+
+        ;(num-var-exp (var num-lit exps)
+         ;            (let ((v1 (value-of (car exps) env)))
+          ;             (let ((ref (ref-val (newref v1))))
+           ;              (if(null? exps) '()
+            ;             (let ((val (value-of (car exps) env)))
+             ;              (begin
+              ;               (setref! (expval->ref ref) val)
+               ;              (num-val 23)))))))
+                         
+                       
 
         (newref-exp (exp1)
                   (let ((v1 (value-of exp1 env)))
@@ -336,28 +467,42 @@
 
         
 
-        ;(while-exp (cond body)
-         ;          (if (value-of cond env)
-          ;             (help-loop cond body env)
-           ;            '()))
-
         (while-exp (cond body)
-        (let loop ()
-          (if (value-of cond env)
-            (begin
-              (help-if body env)
-              (loop))
-            '())))
+                   (let ((val (value-of cond env)))
+                     (if (equal? val (bool-val #t)) (help-while-loop cond body env)
+                       '()))
+                   )
+
+        (for-exp (num-lit var exp1 cond increment body)
+                 (let ((new-env (extend-env var (value-of exp1 env) env)))
+                 (let ((val (value-of cond new-env)))
+                   (if (equal? val (bool-val #t)) (help-for-loop var cond body increment new-env)
+                       '())))
+                   )
+                   
+                 
+
+; (for-exp
+;   (num-lit string?)
+;   (var identifier?)
+;   (exp1 expression?)
+;   (cond expression?)
+;   (increment expression?)
+;   (body (list-of expression?))
+         
+ ;       (while-exp (cond body)
+ ;       (let loop ()
+ ;         (if (value-of cond env)
+ ;           (begin
+  ;            (help-if body env)
+  ;            (loop))
+ ;           '())))
+
+        (print-exp (exps)
+                   (help-print exps env))
+        (endl-exp (nl)
+                  "\n")
         )))
-
-
-(define help-loop
-  (lambda (cond body env)
-    (begin
-      (help-if body env)
-      (if (value-of cond env)
-          (help-loop cond body env)
-          '()))))
 
 (define init-env 
     (lambda ()
@@ -422,16 +567,18 @@
   "begin
  ++5;
    begin
-(5 - 4)
+(5 - 4);
 end;
---5 end")
+--5;
+ end")
 
 (define program-2
   "let x = newref(0)
    in begin
         setref(x, 11);
         setref(x ,(deref(x) - 5));
-        -- deref(x)
+        setref(x, ++deref(x));
+        --deref(x);
       end
 
 ")
@@ -447,19 +594,47 @@ end;
 (define program-5 "if( (5 == 6)) {(5 + 1) (1 + 2) } else{ (5 - 1) (1 + 1)} ")
 
 (define program-6 "let x = newref(0) in begin
-                              while ( (deref(x) < 1) ){ setref(x, (deref(x) + 2)) } ; deref(x) end")
+                              while ( (deref(x) <= 2) ){ setref(x, (deref(x) + 2)) } ; deref(x); end")
 
 (define program-7 "let x = newref(3) in begin
-                              if ( (deref(x) < 5) ) {1} else {0} ; deref(x) end")
+                              if ( (deref(x) < 5) ) {1} else {0} ; deref(x); end")
 
-(print (run program-1))
-(print (run program-2))
+(define program-8
+  "int main() {
+      cout << 6 << 5 << 7 << endl;;
+      cout << (4 - 5) << 8 << 4;;
+      return 0;
+   }")
+
+(define program-9
+  "int main() {
+      for(int i = 0; (i < 3); ++i){
+         cout << 8 << endl;
+      };
+      return 0;
+   }")
+
+(define program-10
+  "int main(){
+      int x = 7;;
+      cout << x << endl;;
+      return 0;
+  }")
+
+;(print (run program-1))
+;(print (run program-2))
 
 
-(print (run program-3))
+;(print (run program-3))
 
-(print (run program-4))
+;(print (run program-4))
 
-(print (run program-5))
+;(print (run program-5))
 
 ;(print (run program-6))
+;(print (run program-7))
+
+(print (run program-8))
+
+(print (run program-9))
+;(print (run program-10))
