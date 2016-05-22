@@ -6,43 +6,43 @@
  (a-program(expl1 expression?)))
 
 (define-datatype expression expression?
+ ;Constants
  (const-exp(num number?))
-  
+
+ ;Binary operations
  (binary-exp
        (exp1 expression?)
        (bin string?)
        (exp2 expression?))
   
+ ;If expressions
  (if-exp
       (exp1 expression?) 
       (body1 (list-of expression?))
       (body2 (list-of expression?)))
-  
+
+ ;Variables
  (var-exp(var symbol?))
-  
+
+ ;Let expression
  (let-exp
    (vars (list-of identifier?))
    (exps (list-of expression?))
    (body expression?))
-  
-;  (begin-exp
-;    (exp expression?)
-;    (exps (list-of expression?)))
-  (begin-exp
+
+ ;Main function
+ (begin-exp
     (num-lit string?)
     (lits (list-of string?))
     (vars (list-of identifier?))
     (exps (list-of expression?))
     (ret expression?))
-  
+
+  ;Prefix -- and ++ operators
   (minus-exp(exp1 expression?))
   (plus-exp(exp1 expression?))
 
-  ;(num-var-exp
-  ; (num-lit string?)
-  ; (var identifier?)
-  ; (exps (list-of expression?)))
-  
+  ;Variable assignment
   (newref-exp
    (exp expression?))
   (deref-exp
@@ -50,43 +50,51 @@
   (setref-exp
    (var identifier?)
    (exp expression?))
-  
+
+  ;Empty list
   (emptylist-exp)
-  
+
+  ;Lists
   (list-exp
    (exps (list-of expression?)))
-  
+
+  ;Procedures
   (proc-exp
    (vars (list-of identifier?))
    (body expression?))
-  
+
+  ;Procedures with multiple arguments
   (letproc-exp
    (name identifier?)
    (vars (list-of identifier?))
    (exp expression?)
    (body expression?))
-  
+
+  ;Recursion
   (letrec-exp
    (names (list-of identifier?))
    (varss (list-of (list-of identifier?)))
    (exps (list-of expression?))
    (body expression?))
-  
+
+  ;Call expressions
   (call-exp
    (rator expression?)
    (rand (list-of expression?)))
 
+  ;While loop
   (while-exp
    (cond expression?)
    (body (list-of expression?)))
+
+  ;For loop
   (for-exp
-   ;(num-lit string?)
-   ;(var identifier?)
    (exp1 expression?)
    (cond expression?)
    (increment expression?)
    (body (list-of expression?)))
-   
+
+  ;Print statements
   (print-exp
    (exps (list-of expression?)))
   (endl-exp
@@ -191,12 +199,14 @@
                                 (proc-val (procedure (car varss) (car exps) env))
                                 (apply-rec (cdr names) (cdr varss) (cdr exps)))))
                       (apply-rec names varss exps))
+      ;Search through environment to find value pointed to by reference
       (extend-env-ref (saved-var saved-ref saved-env)
                       (if (eqv? search-var saved-var)
                           (deref (expval->ref saved-ref))
                       (apply-env saved-env search-var)))
       )))
 
+;Search through environment to find reference index
 (define apply-ref
   (lambda (env search-var)
     (cases environment env
@@ -236,10 +246,15 @@
        symbol)
       (number (digit (arbno digit)) number)
       (number ("-" digit (arbno digit)) number)
+      ;Binary operations
       (binary-op ((or "-" "+" "*" "/" "==" "!=" ">" "<" ">=" "<=")) string)
+      ;Print directives
       (endl ("endl") string)
       (space ("space") string)
       (tab ("tab") string)
+      ;Print user inputted strings
+      (print-string ("'" (arbno (not #\')) "'") string)
+      ;Variable literals
       (literal ((or "int" "double" "float" "long" "long long" "short"
                     "unsigned int" "signed int" "unsigned float" "signed float"
                     "unsigned double" "signed double" "unsigned long" "signed long"
@@ -248,86 +263,96 @@
                     "char" "unsigned char" "signed char"
                     "string" "bool"
                     )) string)
-      (print-string ("'" (arbno letter) "'") string)
       ))
   
   (define the-grammar
     '((program (expression) a-program)
-
+      ;Constants
       (expression (number) const-exp)
-      
+
+      ;Binary operations
       (expression 
        ("(" expression binary-op expression ")")
        binary-exp)
-      
+
+      ;If expression
       (expression
        ("if" "(" expression ")" "{" (arbno expression) "}" "else" "{" (arbno expression) "}")
        if-exp)
 
+      ;Variables
       (expression (identifier) var-exp)
 
+      ;Let expression
       (expression
        ("let" (arbno identifier "=" expression) "in" expression)
        let-exp) 
 
-      ;(expression
-      ; ("begin" expression (arbno ";" expression) "end")
-      ; begin-exp)
+      ;Main function
       (expression
        (literal "main" "(" (arbno literal identifier) ")" "{" (arbno expression ";") "return" expression ";" "}")
        begin-exp)
-      
+
+      ;Prefix -- and ++ operators
       (expression
        ("--" expression)
        minus-exp)
-
       (expression
        ("++" expression)
        plus-exp)
-      
+
+      ;Variable assignment
       (expression
        ("newref" "(" expression ")")
-       newref-exp)
-      
+       newref-exp)  
       (expression
        ("deref" "(" expression ")")
-       deref-exp)
-      
+       deref-exp) 
       (expression
        ("set" identifier "=" expression)
        setref-exp)
 
+      ;Emptylist
       (expression
        ("emptylist")
        emptylist-exp)
-      
+
+      ;Lists
       (expression
        ("list" "(" (separated-list expression ",") ")")
        list-exp)
-      
+
+      ;Procedures
       (expression
        ("proc" "(" (arbno identifier) ")" expression)
        proc-exp)
-      
+
+      ;Procedures with multiple arguments
       (expression
        ("letproc" identifier "(" (arbno identifier) ")" expression "in" expression)
        letproc-exp)
-      
+
+      ;Recursion
       (expression
        ("letrec" (arbno identifier "(" (arbno identifier) ")" "=" expression) "in" expression)
        letrec-exp)
-      
+
+      ;Call expression
       (expression
        ("[" expression (arbno expression) "]")
        call-exp)
-      
+
+      ;While loop
       (expression
        ("while" "(" expression ")" "{" (arbno expression) "}" )
        while-exp)
+      
+      ;For loop
       (expression
        ("for" "(" expression ";" expression ";" expression ")" "{" (arbno expression ";") "}")
        for-exp)
 
+      ;Print statements
       (expression
        ("cout" (arbno "<<" expression) ";")
        print-exp)
@@ -340,6 +365,7 @@
       (expression
        (tab)
        tab-exp)
+      ;Print user inputted strings
       (expression
        (print-string)
        print-string-exp)
@@ -359,32 +385,24 @@
         (a-program (exp1)
           (value-of exp1 (init-env))))))
   
- 
+ ;Help function for if statements
  (define help-if
     (lambda (exps env)
       (cond
         ((null? exps) '())
            (else (cons (value-of (car exps) env)(help-if (cdr exps) env))))))
 
-;(define help-if
- ; (lambda (exps env)
-  ;               (let ((last (value-of (car exps) env)))
-   ;                (define (help-if-rec exps last)
-    ;                 (if (null? exps)
-     ;                    last
-      ;                   (let ((last (value-of (car exps) env)))
-       ;                    (help-if-rec (cdr exps) last))))
-        ;           (help-if-rec exps last))))
-
+;Help function for print statements
 (define help-print
   (lambda (exps env)
     (cond
       ((null? (cdr exps)) (let ((val (value-of (car exps) env)))
-                            (display val)))
+                            (if (expval? val) (display (find-expval val))(display val))))
       (else
        (let ((val (value-of (car exps) env)))
-       (display val) (help-print (cdr exps) env))))))
+       (if (expval? val) (display (find-expval val))(display val)) (help-print (cdr exps) env))))))
 
+;Help function for while-loops
 (define help-while-loop
   (lambda (cond body env)
     (begin
@@ -393,94 +411,79 @@
           (if (equal? val (bool-val #t)) (help-while-loop cond body env)
             '())))))
 
+;Help function for for-loops
 (define help-for-loop
    (lambda (ref cond body increment env)
      (begin
        (help-if body env)
        (let ((new-val (value-of increment env)))
-         ;(display "ref: ")(display ref)(display "\n")
-         ;(display "new-val: ")(display new-val)(display " ")(display (find-expval new-val))
          (setref! ref (find-expval new-val))
          (let ((cond-val (value-of cond env)))
            (if (equal? cond-val (bool-val #t))
                (help-for-loop ref cond body increment env)
                '()))))))
          
-
+;Create new variable references from list
+      ;used to establish environment in main function
 (define declare-variables
   (lambda (vars env)
     (cond
       ((null? vars) env)
-      (else (declare-variables (cdr vars) (extend-env-ref (car vars) (ref-val (newref 0)) env))
-            )
-      )
-    ))
+      (else (declare-variables (cdr vars) (extend-env-ref (car vars) (ref-val (newref 0)) env)))
+      )))
 
+;Find and extract the expval from an unknown value
 (define find-expval
   (lambda (val)
-     ; (display "val: ")
-     ; (display val)
-     ; (display "\nexpval? ")
-     ; (display (expval? val))
     (cond
      ((expval? val)
-      ;(display "\nIn expval cond: ")(display val)(display"\n------\n")
       (cases expval val
 	(num-val (num) (expval->num val))
         (bool-val (bool) (expval->bool val))
         (ref-val (ref) (expval->ref val))
-	(else (report-no-type-found exp)))
-      ); (expval? val)
-     
-    (else
-     ;(display "\nIn else: ")(display val)
-     val
-       );else
-    ) ;cond
-    ))
+	(else (report-no-type-found exp))))
+     (else val)
+     )))
   
 
   (define value-of
     (lambda (exp env)
       (cases expression exp
+        ;Constants
         (const-exp (num) (num-val num))
+
+        ;Variables
         (var-exp (var) (apply-env env var))
+
+        ;Binary Operators 
         (binary-exp (exp1 bin exp2)
           (let ((val1 (value-of exp1 env))
                 (val2 (value-of exp2 env)))
             (let ((num1 (if (expval? val1) (expval->num val1) val1))
                   (num2 (if (expval? val2) (expval->num val2) val2)))
               (cond
-                ((equal? bin "-") (num-val(- num1 num2)))
-                ((equal? bin "+") (num-val(+ num1 num2)))
-                ((equal? bin "*") (num-val(* num1 num2)))
-                ((equal? bin "/") (num-val(/ num1 num2)))
-                ((equal? bin "==")(if (eqv? num1 num2) (bool-val #t)
+                ((equal? bin "-") (num-val(- num1 num2))) ;Subtraction
+                ((equal? bin "+") (num-val(+ num1 num2))) ;Addition
+                ((equal? bin "*") (num-val(* num1 num2))) ;Multiplication
+                ((equal? bin "/") (num-val(/ num1 num2))) ;Division
+                ((equal? bin "==")(if (eqv? num1 num2) (bool-val #t) ; == operator
                    (bool-val #f)))
-                ((equal? bin "!=")(if (eqv? num1 num2) (bool-val #f)
+                ((equal? bin "!=")(if (eqv? num1 num2) (bool-val #f) ; != operator
                    (bool-val #t)))
-                ((equal? bin "<")(if (< num1 num2) (bool-val #t)
+                ((equal? bin "<")(if (< num1 num2) (bool-val #t)     ; < operator
                    (bool-val #f)))
-                ((equal? bin ">")(if (> num1 num2) (bool-val #t)
+                ((equal? bin ">")(if (> num1 num2) (bool-val #t)     ; > operator
                    (bool-val #f)))
-                ((equal? bin "<=")(if (<= num1 num2) (bool-val #t)
+                ((equal? bin "<=")(if (<= num1 num2) (bool-val #t)   ; < =operator
                    (bool-val #f)))
-                ((equal? bin ">=")(if (>= num1 num2) (bool-val #t)
+                ((equal? bin ">=")(if (>= num1 num2) (bool-val #t)   ; >= operator
                    (bool-val #f)))
                 )
               )))
 
-;        (begin-exp (exp exps)
-;                 (let ((last (value-of exp env)))
-;                   (define (begin-exp-rec exps last)
-;                     (if (null? exps)
-;                         last
-;                         (let ((last (value-of (car exps) env)))
-;                           (begin-exp-rec (cdr exps) last))))
-;                   (begin-exp-rec exps last)))
+        ;Main function
         (begin-exp (num-lit lits vars exps ret)
                  (let ((new-env (declare-variables vars env)))
-                   (display "Current environment: ")(display new-env)(display "\n")
                  (define (begin-exp-rec exps n-env)
                    (cond
                      ((null? (cdr exps)) (value-of (car exps) n-env))
@@ -491,6 +494,7 @@
                  (value-of ret new-env)))                        
                        
 
+        ;Variable assignment
         (newref-exp (exp1)
                   (let ((v1 (value-of exp1 env)))
                          (ref-val (newref v1))))
@@ -501,18 +505,18 @@
         (setref-exp (exp1 exp2)
                     (let ((ref (apply-ref env exp1)))
                       (let ((val2 (find-expval (value-of exp2 env))))
-                        ;(display "\nIn setref-exp: ")(display val2)
-                        ;(display "\n ref: ")(display ref)
                         (begin
                            (setref! ref val2)
                             (num-val ref)))))
 
+        ;If statements
         (if-exp (exp1 body1 body2)
           (let ((val1 (value-of exp1 env)))
             (if (expval->bool val1)
               (help-if body1 env)
               (help-if body2 env))))
-        
+
+        ;Let expressions
         (let-exp (vars exps body)
                (let ((vals (map (lambda (exp) (value-of exp env)) exps)))
                  (define (add-env vars vals env)
@@ -520,7 +524,8 @@
                        env
                        (add-env (cdr vars) (cdr vals) (extend-env (car vars) (car vals) env))))
                  (value-of body (add-env vars vals env))))
-        
+
+        ;Prefix -- and ++ operators
         (minus-exp (exp1)
            (let ((val1 (value-of exp1 env)))
              (let ((num1 (- (if (expval? val1) (expval->num val1) val1) 1)))
@@ -530,44 +535,50 @@
              (let ((num1 (+ (if (expval? val1) (expval->num val1) val1) 1)))
              (num-val num1))))
 
+        ;Emptylist
         (emptylist-exp () (list-val '()))
-      
-      (list-exp (exps)
+
+        ;Lists
+        (list-exp (exps)
                 (list-val (map (lambda (exp) (value-of exp env)) exps)))
-      
-      (proc-exp (vars body)
+
+        ;Procedures
+        (proc-exp (vars body)
                 (proc-val (procedure vars body env)))
-      
-      (letproc-exp (proc-name proc-args proc-body let-body)
+
+        ;Procedures with multiple arguments
+        (letproc-exp (proc-name proc-args proc-body let-body)
                    (let ((proc (proc-val (procedure proc-args proc-body env))))
                      (value-of let-body
                                (extend-env proc-name proc env))))
-      
-      (letrec-exp (p-name b-var p-body letrec-body)
+
+        ;Recursion
+        (letrec-exp (p-name b-var p-body letrec-body)
                   (value-of letrec-body
                             (extend-env-rec p-name b-var p-body env)))
-      
-      (call-exp (rator rand)
+
+        ;Call expression
+        (call-exp (rator rand)
                 (let ((proc (expval->proc (value-of rator env)))
                       (args (map (lambda (exp) (value-of exp env)) rand)))
                   (apply-procedure proc args)))
 
-        
-
+        ;While loops
         (while-exp (cond body)
                    (let ((val (value-of cond env)))
                      (if (equal? val (bool-val #t)) (help-while-loop cond body env)
                        '()))
                    )
 
+        ;For loops
         (for-exp (exp1 cond increment body)
-                 (let ((init-val (expval->num (value-of exp1 env))))
-                   ;(display "exp1: ")(display exp1)(display " ")(display "init-val: ")(display init-val)(display "\n")
+                 (let ((init-val (expval->num (value-of exp1 env)))) 
                  (let ((cond-val (value-of cond env)))
                    (if (equal? cond-val (bool-val #t)) (help-for-loop init-val cond body increment env)
                        '())))
                    )
 
+        ;Print statements
         (print-exp (exps)
                    (help-print exps env))
         (endl-exp (nl)
@@ -576,6 +587,7 @@
                   " ")
         (tab-exp (nl)
                   "\t")
+        ;Print user inputted strings
         (print-string-exp (ps)
                   (let ((len (string-length ps)))
                     (substring ps 1 (- len 1))))
@@ -585,6 +597,7 @@
     (lambda ()
       (empty-env)))
 
+;Variable assignment store and reference functions
 (define (empty-store)
   (make-vector 0))
 
@@ -625,6 +638,7 @@
   (vector-set! the-store ref val)
   ref)
 
+;Apply procedure function
 (define apply-procedure
   (lambda (proc1 args)
     (cases proc proc1
@@ -640,93 +654,93 @@
                                                 (extend-env (car vars) (car vals) env)))))
                  (apply-procedure-rec vars args saved-env)))))
 
+;Sample programs
 (define program-1
-  "begin
- ++5;
-   begin
-(5 - 4);
-end;
---5;
- end")
+  "int main() {
+      cout << 6 << space << 5 << tab << 7 << endl;;
+      cout << (4 - 5) << ' '<< 8 << ' '<< 4 << endl;;
+      return 0;
+   }")
 
 (define program-2
-  "let x = newref(0)
-   in begin
-        setref(x, 11);
-        setref(x ,(deref(x) - 5));
-        setref(x, ++deref(x));
-        --deref(x);
-      end
-
-")
-
-(define program-3 "letrec sum(x y) = if ((x == 0)) {y} else{ [sum (x - 1) (y + 1)]} in [sum 3 2]")
-
-(define program-4 "letrec
-                             even(x) = if ((x == 0)) {1} else{ [odd (x - 1)]}
-                             odd(x) = if ((x == 0)) {0} else{ [even (x - 1)]}
-                           in [odd 13]")
-
-
-(define program-5 "if( (5 == 6)) {(5 + 1) (1 + 2) } else{ (5 - 1) (1 + 1)} ")
-
-(define program-6 "let x = newref(0) in begin
-                              while ( (deref(x) <= 2) ){ setref(x, (deref(x) + 2)) } ; deref(x); end")
-
-(define program-7 "let x = newref(3) in begin
-                              if ( (deref(x) < 5) ) {1} else {0} ; deref(x); end")
-
-(define program-8
-  "int main() {
-      cout << 6 << 5 << 7 << endl;;
-      cout << (4 - 5) << 8 << 4;;
-      return 0;
-   }")
-
-(define program-9
-  "int main(int x int y int z) {
-      for(int i = 0; (i < 3); ++i){
-         setref(x, i);
-         cout << x << endl;;
+  "int main(int x int y int z int i) {
+      for(set i = 0; (i < 3); ++i){
+         set x = i;
+         cout << x << ' ';;
       };
+      cout << endl;;
       return 0;
    }")
 
-(define program-10
+(define program-3
   "int main(int x int y int z int a int i){
       set y = 11;
       set x = y;
       set z = ((x - 1) * 2);
-      cout << z << endl;;
+      cout << 'x: ' << x << ', y: ' << y << ', z = ((x-1) *2): ' << z << endl;;
+      cout << 'For loop calculating i * i: ' << endl;;
       for(set i = 0; (i < y); ++i){
-         set a = i;
+         set a = (i * i);
          cout << a << space;;
       };
       cout << endl;;
       return x;
   }")
 
-(define program-11
+(define program-4
   "int main(){
       cout << 'hello' << space << 'world' << endl;;
       return 0;
   }")
 
-;(print (run program-1))
-;(print (run program-2))
+(define program-5
+  "int main(int x int y int z int i){
+      set x = 10;
+      while ( ((i * 2) < x) ) {
+         cout << i << ' ';
+         set i = ++i
+      };
+      cout << endl;;
+      if ( (i > y) ) {
+         cout << 'i < y = true' << endl;}
+      else { cout << 'This will not print' << endl;};
+      return 0;
+  }")
 
+;Sample program runs
+(print (run program-1))
+;      Output:
 
-;(print (run program-3))
+;      6 5	7
+;      -1 8 4
 
-;(print (run program-4))
+;      return : #(struct:num-val 0)
 
-;(print (run program-5))
+(print (run program-2))
+;      Output:
 
-;(print (run program-6))
-;(print (run program-7))
+;      0 1 2
 
-;(print (run program-8))
+;      return: #(struct:num-val 0)
 
-;(print (run program-9))
-(print (run program-10))
-(print (run program-11))
+(print (run program-3))
+;      Output:
+
+;      x: 11, y: 11, z = ((x-1) *2): 20
+;      For loop calculating i * i: 
+;      0 1 4 9 16 25 36 49 64 81 100
+
+;      return: 11
+(print (run program-4))
+;      Output:
+
+;      hello world
+
+;      return: #(struct:num-val 0)
+(print (run program-5))
+;      Output:
+
+;      0 1 2 3 4 
+;      i < y = true
+
+;      return: #(struct:num-val 0)
