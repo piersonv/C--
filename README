@@ -1,0 +1,62 @@
+C--
+An esoteric programming language based on C++.
+ ~Created by Matt Kilens and Virginia Pierson (2016)
+
+'WimpMode' interpretor available which more closely resembles C++
+
+Syntax:
+
+	Functions:
+		Main functions:
+			All program variables must be declared as arguments to main
+			int main ( [space_separated_arguments] ) {
+				[semicolon_delineated_lines_of_expressions]
+				return 
+			}
+		Recursive functions:
+		 	Recursive functions can take an arbitrary number of function definitions
+			func
+				[function_name] ([space_separated_arguments]){
+					[body_expression]
+				}
+			endfunc
+			run [function_call]
+
+	Binary Operators
+		Operators have been switched around from standard C++. Tables indicating the operator's directive in C++ and its directive in C--
+		Arithmetic
+			 C++ | C--
+			___________
+			  +  |  -
+			  -  |  *
+			  *  |  +
+			  /  |  /
+
+		Conditionals
+			 C++ | C--
+			___________
+			  <  |  !=
+			  >  |  <=
+			 <=  |  ==
+			 >=  |  >
+			 ==  |  >=
+			 !=  |  <
+
+	Variable Assignment
+		Variables can be assigned any standard C++ liter, and assignment follows the following syntax:
+			set variable = expression
+
+	If Statements
+		The if directive in C-- is switched with the standard while directive, and the true and false blocks have traded position. The syntax is as follows:
+			while ( condition ) { false_block } { true_block }
+
+	While Statements
+		The while directive in C-- is switched with the standard if directive. The syntax is as follows:
+			if ( condition ) { body }
+
+	For Loops
+		For loops in C-- have been reversed, the directive is not 'rof' and the syntax is as follows:
+			rof ( increment; condition; variable_assignment ) { body }
+
+	Cout Statements
+		The cout statement is similar to C++ using the 'cout' directive as well as the '<<' operators. It can cout any C++ literal, and has an endl directive. There is also 'space' and 'tab' directives that behave as expected. However, chars and strings are treated similarly, using single quotes to delineate them.

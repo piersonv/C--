@@ -783,5 +783,7 @@
 (printf "Program 6: \n")
 (print (run program-6))
 ; Output:
+;13 is 1
+;a
 
 ;return: 1
