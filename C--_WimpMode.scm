@@ -1,6 +1,7 @@
 #lang eopl
 
 (define print eopl:pretty-print)
+(define printf eopl:printf)
 
 (define-datatype program program?
  (a-program(expl1 expression?)))
@@ -334,7 +335,7 @@
 
       ;Recursion
       (expression
-       ("letrec" (arbno identifier "(" (arbno identifier) ")" "=" expression) "in" expression)
+       ("func" (arbno identifier "(" (arbno identifier) ")" "{" expression "}") "endfunc" "run" expression)
        letrec-exp)
 
       ;Call expression
@@ -387,10 +388,10 @@
   
  ;Help function for if statements
  (define help-if
-    (lambda (exps env)
+    (lambda (exps env lst)
       (cond
-        ((null? exps) '())
-           (else (cons (value-of (car exps) env)(help-if (cdr exps) env))))))
+        ((null? exps) lst)
+           (else (help-if (cdr exps) env (value-of (car exps) env))))))
 
 ;Help function for print statements
 (define help-print
@@ -406,7 +407,8 @@
 (define help-while-loop
   (lambda (cond body env)
     (begin
-      (help-if body env)
+      (let ((lst '()))
+      (help-if body env lst))
         (let ((val (value-of cond env)))
           (if (equal? val (bool-val #t)) (help-while-loop cond body env)
             '())))))
@@ -415,7 +417,8 @@
 (define help-for-loop
    (lambda (ref cond body increment env)
      (begin
-       (help-if body env)
+       (let ((lst '()))
+       (help-if body env lst))
        (let ((new-val (value-of increment env)))
          (setref! ref (find-expval new-val))
          (let ((cond-val (value-of cond env)))
@@ -512,9 +515,10 @@
         ;If statements
         (if-exp (exp1 body1 body2)
           (let ((val1 (value-of exp1 env)))
+            (let ((lst '()))
             (if (expval->bool val1)
-              (help-if body1 env)
-              (help-if body2 env))))
+              (help-if body1 env lst)
+              (help-if body2 env lst)))))
 
         ;Let expressions
         (let-exp (vars exps body)
@@ -700,14 +704,33 @@
          cout << i << ' ';
          set i = ++i
       };
-      cout << endl;;
+      cout << endl;; //comment
       if ( (i > y) ) {
          cout << 'i < y = true' << endl;}
       else { cout << 'This will not print' << endl;};
       return 0;
   }")
 
+(define program-6
+  "int main (int x int y){
+     set x = 
+     func
+        even(x) {
+            if ((x == 0)) {1} else{ [odd (x - 1)]}
+        }
+        odd(x) {
+            if ((x == 0)) {0} else{ [even (x - 1)]}
+        }
+     endfunc
+     run [odd 13];
+     cout << '13 is ' << x << endl;;
+     set y = 'a';
+     cout << y << endl;;
+     return x;
+   }")
+
 ;Sample program runs
+(printf "Program 1: \n")
 (print (run program-1))
 ;      Output:
 
@@ -715,14 +738,18 @@
 ;      -1 8 4
 
 ;      return : #(struct:num-val 0)
+(printf "---------------------------------------\n")
 
+(printf "Program 2: \n")
 (print (run program-2))
 ;      Output:
 
 ;      0 1 2
 
 ;      return: #(struct:num-val 0)
+(printf "---------------------------------------\n")
 
+(printf "Program 3: \n")
 (print (run program-3))
 ;      Output:
 
@@ -731,12 +758,18 @@
 ;      0 1 4 9 16 25 36 49 64 81 100
 
 ;      return: 11
+(printf "---------------------------------------\n")
+
+(printf "Program 4: \n")
 (print (run program-4))
 ;      Output:
 
 ;      hello world
 
 ;      return: #(struct:num-val 0)
+(printf "---------------------------------------\n")
+
+(printf "Program 5: \n")
 (print (run program-5))
 ;      Output:
 
@@ -744,3 +777,10 @@
 ;      i < y = true
 
 ;      return: #(struct:num-val 0)
+(printf "---------------------------------------\n")
+
+(printf "Program 6: \n")
+(print (run program-6))
+; Output:
+
+;return: 1
